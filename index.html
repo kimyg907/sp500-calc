@@ -1,0 +1,114 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>S&P500 적립식 투자 계산기</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="sp500Data.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: right; }
+    th { background-color: #f2f2f2; }
+    input, button { margin: 5px; padding: 5px; }
+  </style>
+</head>
+<body>
+  <h2>S&P500 환율 반영 적립식 투자 계산기</h2>
+
+  <label>시작 날짜: <input type="month" id="startDate" value="2010-01"></label>
+  <label>종료 날짜: <input type="month" id="endDate" value="2024-12"></label>
+  <label>월 투자금(₩): <input type="number" id="monthlyAmount" value="1000000"></label>
+  <button onclick="calculate()">계산하기</button>
+
+  <canvas id="chart" height="100"></canvas>
+
+  <table id="resultTable">
+    <thead>
+      <tr>
+        <th>날짜</th>
+        <th>S&P500 종가 (USD)</th>
+        <th>누적 투자금 (₩)</th>
+        <th>총 평가금액 (₩)</th>
+        <th>수익금 (₩)</th>
+        <th>수익률(%)</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    const exchangeRate = 1200;
+
+    function calculate() {
+      const start = document.getElementById("startDate").value;
+      const end = document.getElementById("endDate").value;
+      const monthlyKRW = parseFloat(document.getElementById("monthlyAmount").value);
+      const tableBody = document.querySelector("#resultTable tbody");
+      tableBody.innerHTML = "";
+
+      const results = [];
+      let totalInvestedKRW = 0;
+      let totalShares = 0;
+
+      for (let d = new Date(start + "-01"); d <= new Date(end + "-01"); d.setMonth(d.getMonth() + 1)) {
+        const key = d.toISOString().slice(0, 7);
+        const close = sp500Data[key];
+        if (!close) continue;
+
+        const monthlyUSD = monthlyKRW / exchangeRate;
+        const sharesBought = monthlyUSD / close;
+        totalShares += sharesBought;
+        totalInvestedKRW += monthlyKRW;
+
+        const currentValueUSD = totalShares * close;
+        const currentValueKRW = currentValueUSD * exchangeRate;
+        const profit = currentValueKRW - totalInvestedKRW;
+        const profitRate = (profit / totalInvestedKRW) * 100;
+
+        results.push({
+          date: key,
+          close: close.toFixed(2),
+          invested: totalInvestedKRW.toFixed(0),
+          value: currentValueKRW.toFixed(0),
+          profit: profit.toFixed(0),
+          rate: profitRate.toFixed(2)
+        });
+      }
+
+      results.forEach(r => {
+        const row = `<tr>
+          <td>${r.date}</td>
+          <td>${r.close}</td>
+          <td>${Number(r.invested).toLocaleString()}</td>
+          <td>${Number(r.value).toLocaleString()}</td>
+          <td>${Number(r.profit).toLocaleString()}</td>
+          <td>${r.rate}%</td>
+        </tr>`;
+        tableBody.innerHTML += row;
+      });
+
+      const labels = results.map(r => r.date);
+      const values = results.map(r => r.value);
+      new Chart(document.getElementById("chart"), {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: "총 평가금액(₩)",
+            data: values,
+            borderWidth: 2,
+            fill: false,
+            tension: 0.1
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: { y: { beginAtZero: false } }
+        }
+      });
+    }
+  </script>
+</body>
+</html>

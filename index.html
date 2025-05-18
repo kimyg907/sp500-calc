@@ -1,11 +1,10 @@
-
 <!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>S&P500 적립식 투자 계산기</title>
+  <title>S&P500 일자별 적립식 투자 계산기</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="sp500Data.js"></script>
+  <script src="sp500Data.js"></script> <!-- 일자별 데이터 JS -->
   <style>
     body { font-family: Arial, sans-serif; padding: 20px; }
     table { border-collapse: collapse; width: 100%; margin-top: 20px; }
@@ -15,10 +14,11 @@
   </style>
 </head>
 <body>
-  <h2>S&P500 환율 반영 적립식 투자 계산기</h2>
+  <h2>S&P500 환율 반영 일자별 적립식 투자 계산기</h2>
 
-  <label>시작 날짜: <input type="month" id="startDate" value="2010-01"></label>
-  <label>종료 날짜: <input type="month" id="endDate" value="2024-12"></label>
+  <label>시작 날짜: <input type="date" id="startDate" value="2010-01-01"></label>
+  <label>종료 날짜: <input type="date" id="endDate" value="2024-12-31"></label>
+  <label>매달 투자일자(1~28일): <input type="number" id="dayOfMonth" min="1" max="28" value="1"></label>
   <label>월 투자금(₩): <input type="number" id="monthlyAmount" value="1000000"></label>
   <button onclick="calculate()">계산하기</button>
 
@@ -42,9 +42,10 @@
     const exchangeRate = 1200;
 
     function calculate() {
-      const start = document.getElementById("startDate").value;
-      const end = document.getElementById("endDate").value;
+      const start = new Date(document.getElementById("startDate").value);
+      const end = new Date(document.getElementById("endDate").value);
       const monthlyKRW = parseFloat(document.getElementById("monthlyAmount").value);
+      const investDay = parseInt(document.getElementById("dayOfMonth").value);
       const tableBody = document.querySelector("#resultTable tbody");
       tableBody.innerHTML = "";
 
@@ -52,10 +53,28 @@
       let totalInvestedKRW = 0;
       let totalShares = 0;
 
-      for (let d = new Date(start + "-01"); d <= new Date(end + "-01"); d.setMonth(d.getMonth() + 1)) {
-        const key = d.toISOString().slice(0, 7);
-        const close = sp500Data[key];
-        if (!close) continue;
+      const currentDate = new Date(start.getTime());
+      while (currentDate <= end) {
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth() + 1;
+        const day = Math.min(investDay, 28); // 안전한 날짜 처리
+        const investDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+        // 실제 거래일 확인 (없으면 다음날, 다다음날 순으로 보완)
+        let realDate = investDate;
+        let attempts = 0;
+        while (!sp500DailyData[realDate] && attempts < 5) {
+          const d = new Date(realDate);
+          d.setDate(d.getDate() + 1);
+          realDate = d.toISOString().slice(0, 10);
+          attempts++;
+        }
+
+        const close = sp500DailyData[realDate];
+        if (!close) {
+          currentDate.setMonth(currentDate.getMonth() + 1);
+          continue; // 건너뛰기
+        }
 
         const monthlyUSD = monthlyKRW / exchangeRate;
         const sharesBought = monthlyUSD / close;
@@ -68,13 +87,15 @@
         const profitRate = (profit / totalInvestedKRW) * 100;
 
         results.push({
-          date: key,
+          date: realDate,
           close: close.toFixed(2),
           invested: totalInvestedKRW.toFixed(0),
           value: currentValueKRW.toFixed(0),
           profit: profit.toFixed(0),
           rate: profitRate.toFixed(2)
         });
+
+        currentDate.setMonth(currentDate.getMonth() + 1);
       }
 
       results.forEach(r => {

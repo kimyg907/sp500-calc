@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>S&P500 일자별 적립식 투자 계산기</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="sp500DailyData.js"></script> <!-- 일자별 종가 데이터 -->
+  <script src="sp500DailyData.js"></script>
   <style>
     body { font-family: Arial, sans-serif; padding: 20px; }
     table { border-collapse: collapse; width: 100%; margin-top: 20px; }
@@ -12,6 +12,8 @@
     th { background-color: #f2f2f2; }
     input, button { margin: 5px; padding: 5px; }
     label { display: inline-block; margin-right: 10px; }
+    .pagination { margin-top: 10px; text-align: center; }
+    .pagination button { margin: 2px; padding: 4px 10px; }
   </style>
 </head>
 <body>
@@ -39,9 +41,14 @@
     <tbody></tbody>
   </table>
 
+  <div class="pagination" id="pagination"></div>
+
   <script>
     const exchangeRate = 1200;
     let chartInstance = null;
+    let results = [];
+    const pageSize = 10;
+    let currentPage = 1;
 
     function calculate() {
       const startInput = document.getElementById("startDate").value;
@@ -50,6 +57,7 @@
       const monthlyKRW = parseFloat(document.getElementById("monthlyAmount").value);
       const tableBody = document.querySelector("#resultTable tbody");
       tableBody.innerHTML = "";
+      results = [];
 
       if (!startInput || !endInput || isNaN(investDay) || isNaN(monthlyKRW)) {
         alert("모든 입력 값을 올바르게 입력해주세요.");
@@ -63,7 +71,6 @@
         return;
       }
 
-      const results = [];
       let totalInvestedKRW = 0;
       let totalShares = 0;
       const currentDate = new Date(start.getTime());
@@ -74,7 +81,6 @@
         const day = Math.min(investDay, 28);
         const investDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
-        // 실제 거래일 찾기
         let realDate = investDate;
         let attempts = 0;
         while (!sp500DailyData[realDate] && attempts < 5) {
@@ -86,7 +92,6 @@
 
         const close = sp500DailyData[realDate];
         if (!close) {
-          console.warn("거래 데이터 없음:", investDate);
           currentDate.setMonth(currentDate.getMonth() + 1);
           continue;
         }
@@ -118,7 +123,17 @@
         return;
       }
 
-      results.forEach(r => {
+      renderTable();
+      renderPagination();
+      renderChart();
+    }
+
+    function renderTable() {
+      const tableBody = document.querySelector("#resultTable tbody");
+      tableBody.innerHTML = "";
+      const start = (currentPage - 1) * pageSize;
+      const end = start + pageSize;
+      results.slice(start, end).forEach(r => {
         const row = `<tr>
           <td>${r.date}</td>
           <td>${r.close}</td>
@@ -129,32 +144,57 @@
         </tr>`;
         tableBody.innerHTML += row;
       });
+    }
 
+    function renderPagination() {
+      const totalPages = Math.ceil(results.length / pageSize);
+      const container = document.getElementById("pagination");
+      container.innerHTML = "";
+      for (let i = 1; i <= totalPages; i++) {
+        const btn = document.createElement("button");
+        btn.textContent = i;
+        if (i === currentPage) btn.disabled = true;
+        btn.onclick = () => {
+          currentPage = i;
+          renderTable();
+        };
+        container.appendChild(btn);
+      }
+    }
+
+    function renderChart() {
       const labels = results.map(r => r.date);
       const values = results.map(r => r.value);
+      const invested = results.map(r => r.invested);
 
-      if (chartInstance) {
-        chartInstance.destroy();
-      }
+      if (chartInstance) chartInstance.destroy();
 
       chartInstance = new Chart(document.getElementById("chart"), {
         type: 'line',
         data: {
           labels: labels,
-          datasets: [{
-            label: "총 평가금액(₩)",
-            data: values,
-            borderWidth: 2,
-            fill: false,
-            tension: 0.1
-          }]
+          datasets: [
+            {
+              label: "총 평가금액(₩)",
+              data: values,
+              borderColor: 'blue',
+              fill: false,
+              tension: 0.1
+            },
+            {
+              label: "투자원금(₩)",
+              data: invested,
+              borderColor: 'gray',
+              borderDash: [5, 5],
+              fill: false,
+              tension: 0.1
+            }
+          ]
         },
         options: {
           responsive: true,
           scales: {
-            y: {
-              beginAtZero: false
-            }
+            y: { beginAtZero: false }
           }
         }
       });
